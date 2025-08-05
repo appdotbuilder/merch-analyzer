@@ -1,207 +1,249 @@
 
-import { serial, text, pgTable, timestamp, numeric, integer, pgEnum, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { 
+  bigserial, 
+  serial, 
+  text, 
+  pgTable, 
+  timestamp, 
+  numeric, 
+  integer, 
+  boolean, 
+  date,
+  smallint,
+  jsonb,
+  uuid,
+  bigint,
+  unique,
+  index
+} from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
-// Enums
-export const marketplaceEnum = pgEnum('marketplace', ['USA', 'UK', 'Germany']);
-export const productTypeEnum = pgEnum('product_type', ['T-Shirt', 'Tank Top', 'Long Sleeve', 'Hoodie', 'Sweatshirt', 'V-Neck', 'Premium', 'Other']);
-export const scrapingPhaseEnum = pgEnum('scraping_phase', ['Discovery', 'Enrichment']);
-export const scrapingStatusEnum = pgEnum('scraping_status', ['Success', 'Failed', 'Skipped']);
+export const marketplacesTable = pgTable('marketplaces', {
+  id: smallint('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  name: text('name').notNull()
+});
 
-// Products table
+export const productTypesTable = pgTable('product_types', {
+  id: smallint('id').primaryKey(),
+  name: text('name').notNull().unique()
+});
+
+export const brandsTable = pgTable('brands', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  normalized_name: text('normalized_name').notNull()
+});
+
 export const productsTable = pgTable('products', {
-  id: serial('id').primaryKey(),
-  asin: text('asin').notNull(),
-  title: text('title').notNull(),
-  marketplace: marketplaceEnum('marketplace').notNull(),
-  product_type: productTypeEnum('product_type').notNull(),
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  asin: text('asin').notNull().unique(),
+  marketplace_id: smallint('marketplace_id').notNull().references(() => marketplacesTable.id),
+  product_type_id: smallint('product_type_id').references(() => productTypesTable.id),
+  brand_id: integer('brand_id').references(() => brandsTable.id),
+  title: text('title'),
+  description_text: text('description_text'),
   price: numeric('price', { precision: 10, scale: 2 }),
-  currency: text('currency'),
+  currency_code: text('currency_code').default('USD'),
   rating: numeric('rating', { precision: 3, scale: 2 }),
-  review_count: integer('review_count'),
+  reviews_count: integer('reviews_count'),
   bsr: integer('bsr'),
-  bsr_category: text('bsr_category'),
-  image_url: text('image_url'),
-  product_url: text('product_url').notNull(),
-  brand: text('brand'),
-  publication_date: timestamp('publication_date'),
-  last_scraped_at: timestamp('last_scraped_at'),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
+  bsr_30_days_avg: integer('bsr_30_days_avg'),
+  bullet_points: text('bullet_points').array(),
+  images: text('images').array(),
+  product_url: text('product_url'),
+  published_at: date('published_at'),
+  deleted: boolean('deleted').default(false),
+  status: text('status').notNull().default('pending_enrichment'),
+  discovery_query: text('discovery_query'),
+  source_type: text('source_type').default('scraper'),
+  first_seen_at: timestamp('first_seen_at', { withTimezone: true }).defaultNow(),
+  last_scraped_at: timestamp('last_scraped_at', { withTimezone: true }),
+  raw_data: jsonb('raw_data'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
-  asinMarketplaceIdx: uniqueIndex('products_asin_marketplace_idx').on(table.asin, table.marketplace),
-  bsrIdx: index('products_bsr_idx').on(table.bsr),
-  priceIdx: index('products_price_idx').on(table.price),
-  ratingIdx: index('products_rating_idx').on(table.rating),
-  publicationDateIdx: index('products_publication_date_idx').on(table.publication_date)
+  marketplaceIdx: index('idx_products_marketplace_id').on(table.marketplace_id),
+  productTypeIdx: index('idx_products_product_type_id').on(table.product_type_id),
+  brandIdx: index('idx_products_brand_id').on(table.brand_id),
+  priceIdx: index('idx_products_price').on(table.price),
+  ratingIdx: index('idx_products_rating').on(table.rating),
+  reviewsCountIdx: index('idx_products_reviews_count').on(table.reviews_count),
+  bsrIdx: index('idx_products_bsr').on(table.bsr),
+  bsr30DaysAvgIdx: index('idx_products_bsr_30_days_avg').on(table.bsr_30_days_avg),
+  publishedAtIdx: index('idx_products_published_at').on(table.published_at),
+  deletedIdx: index('idx_products_deleted').on(table.deleted),
+  firstSeenAtIdx: index('idx_products_first_seen_at_desc').on(table.first_seen_at),
+  lastScrapedAtIdx: index('idx_products_last_scraped_at_desc').on(table.last_scraped_at)
 }));
 
-// BSR History table
-export const bsrHistoryTable = pgTable('bsr_history', {
-  id: serial('id').primaryKey(),
-  product_id: integer('product_id').notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
-  bsr: integer('bsr').notNull(),
-  bsr_category: text('bsr_category').notNull(),
-  recorded_at: timestamp('recorded_at').notNull(),
-  created_at: timestamp('created_at').defaultNow().notNull()
+export const productKeywordsTable = pgTable('product_keywords', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  product_id: bigint('product_id', { mode: 'number' }).notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
+  keyword: text('keyword').notNull()
 }, (table) => ({
-  productIdIdx: index('bsr_history_product_id_idx').on(table.product_id),
-  recordedAtIdx: index('bsr_history_recorded_at_idx').on(table.recorded_at)
+  productIdIdx: index('idx_product_keywords_product_id').on(table.product_id),
+  keywordIdx: index('idx_product_keywords_keyword').on(table.keyword)
 }));
 
-// Price History table
-export const priceHistoryTable = pgTable('price_history', {
-  id: serial('id').primaryKey(),
-  product_id: integer('product_id').notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
-  price: numeric('price', { precision: 10, scale: 2 }).notNull(),
-  currency: text('currency').notNull(),
-  recorded_at: timestamp('recorded_at').notNull(),
-  created_at: timestamp('created_at').defaultNow().notNull()
-}, (table) => ({
-  productIdIdx: index('price_history_product_id_idx').on(table.product_id),
-  recordedAtIdx: index('price_history_recorded_at_idx').on(table.recorded_at)
-}));
-
-// Review History table
-export const reviewHistoryTable = pgTable('review_history', {
-  id: serial('id').primaryKey(),
-  product_id: integer('product_id').notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
-  rating: numeric('rating', { precision: 3, scale: 2 }).notNull(),
-  review_count: integer('review_count').notNull(),
-  recorded_at: timestamp('recorded_at').notNull(),
-  created_at: timestamp('created_at').defaultNow().notNull()
-}, (table) => ({
-  productIdIdx: index('review_history_product_id_idx').on(table.product_id),
-  recordedAtIdx: index('review_history_recorded_at_idx').on(table.recorded_at)
-}));
-
-// User Preferences table
-export const userPreferencesTable = pgTable('user_preferences', {
-  id: serial('id').primaryKey(),
-  user_id: text('user_id').notNull().unique(),
-  excluded_brands: jsonb('excluded_brands').notNull().default([]),
-  excluded_keywords: jsonb('excluded_keywords').notNull().default([]),
-  preferred_marketplaces: jsonb('preferred_marketplaces').notNull().default([]),
-  preferred_product_types: jsonb('preferred_product_types').notNull().default([]),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
+export const profilesTable = pgTable('profiles', {
+  user_id: uuid('user_id').primaryKey(),
+  email: text('email'),
+  full_name: text('full_name'),
+  avatar_url: text('avatar_url'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
 });
 
-// Favorite Groups table
+export const excludedBrandsTable = pgTable('excluded_brands', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: uuid('user_id').notNull().references(() => profilesTable.user_id, { onDelete: 'cascade' }),
+  brand_id: integer('brand_id').notNull().references(() => brandsTable.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
+export const excludedKeywordsTable = pgTable('excluded_keywords', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: uuid('user_id').notNull().references(() => profilesTable.user_id, { onDelete: 'cascade' }),
+  keyword: text('keyword').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
 export const favoriteGroupsTable = pgTable('favorite_groups', {
-  id: serial('id').primaryKey(),
-  user_id: text('user_id').notNull(),
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: uuid('user_id').notNull().references(() => profilesTable.user_id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  description: text('description'),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
 });
 
-// Favorite Group Products junction table
-export const favoriteGroupProductsTable = pgTable('favorite_group_products', {
-  id: serial('id').primaryKey(),
-  group_id: integer('group_id').notNull().references(() => favoriteGroupsTable.id, { onDelete: 'cascade' }),
-  product_id: integer('product_id').notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
-  added_at: timestamp('added_at').defaultNow().notNull()
+export const userFavoriteProductsGroupsTable = pgTable('user_favorite_products_groups', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: uuid('user_id').notNull().references(() => profilesTable.user_id, { onDelete: 'cascade' }),
+  product_id: bigint('product_id', { mode: 'number' }).notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
+  group_id: bigint('group_id', { mode: 'number' }).notNull().references(() => favoriteGroupsTable.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
+export const bsrHistoryTable = pgTable('bsr_history', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  product_id: bigint('product_id', { mode: 'number' }).notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
+  date: date('date').notNull(),
+  bsr: integer('bsr')
 }, (table) => ({
-  groupProductIdx: uniqueIndex('favorite_group_products_group_product_idx').on(table.group_id, table.product_id)
+  productDateIdx: index('idx_bsr_history_product_date').on(table.product_id, table.date)
 }));
 
-// Scraping Logs table
-export const scrapingLogsTable = pgTable('scraping_logs', {
-  id: serial('id').primaryKey(),
-  phase: scrapingPhaseEnum('phase').notNull(),
-  product_id: integer('product_id').references(() => productsTable.id),
-  asin: text('asin'),
-  marketplace: marketplaceEnum('marketplace').notNull(),
-  status: scrapingStatusEnum('status').notNull(),
-  error_message: text('error_message'),
-  scraped_at: timestamp('scraped_at').notNull(),
-  created_at: timestamp('created_at').defaultNow().notNull()
+export const priceHistoryTable = pgTable('price_history', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  product_id: bigint('product_id', { mode: 'number' }).notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
+  date: date('date').notNull(),
+  price: numeric('price', { precision: 10, scale: 2 }),
+  currency_code: text('currency_code').notNull()
 }, (table) => ({
-  phaseIdx: index('scraping_logs_phase_idx').on(table.phase),
-  statusIdx: index('scraping_logs_status_idx').on(table.status),
-  scrapedAtIdx: index('scraping_logs_scraped_at_idx').on(table.scraped_at)
+  productDateIdx: index('idx_price_history_product_date').on(table.product_id, table.date)
 }));
+
+export const reviewHistoryTable = pgTable('review_history', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  product_id: bigint('product_id', { mode: 'number' }).notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
+  date: date('date').notNull(),
+  reviews_count: integer('reviews_count'),
+  rating: numeric('rating', { precision: 3, scale: 2 })
+}, (table) => ({
+  productDateIdx: index('idx_review_history_product_date').on(table.product_id, table.date)
+}));
+
+export const dailyProductStatsTable = pgTable('daily_product_stats', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  product_id: bigint('product_id', { mode: 'number' }).notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
+  date: date('date').notNull(),
+  avg_bsr_7: integer('avg_bsr_7'),
+  avg_bsr_30: integer('avg_bsr_30'),
+  avg_bsr_90: integer('avg_bsr_90')
+}, (table) => ({
+  productDateIdx: index('idx_daily_product_stats_product_date').on(table.product_id, table.date)
+}));
+
+export const savedProductsTable = pgTable('saved_products', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: uuid('user_id').notNull().references(() => profilesTable.user_id, { onDelete: 'cascade' }),
+  product_id: bigint('product_id', { mode: 'number' }).notNull().references(() => productsTable.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
+export const chatHistoryTable = pgTable('chat_history', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: uuid('user_id').notNull().references(() => profilesTable.user_id, { onDelete: 'cascade' }),
+  message: text('message').notNull(),
+  response: text('response'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
+export const scrapingSessionsTable = pgTable('scraping_sessions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  marketplace_id: smallint('marketplace_id').notNull().references(() => marketplacesTable.id),
+  status: text('status').notNull(),
+  products_found: integer('products_found'),
+  started_at: timestamp('started_at', { withTimezone: true }).defaultNow(),
+  completed_at: timestamp('completed_at', { withTimezone: true }),
+  query: text('query')
+});
 
 // Relations
-export const productsRelations = relations(productsTable, ({ many }) => ({
+export const marketplacesRelations = relations(marketplacesTable, ({ many }) => ({
+  products: many(productsTable),
+  scrapingSessions: many(scrapingSessionsTable)
+}));
+
+export const productTypesRelations = relations(productTypesTable, ({ many }) => ({
+  products: many(productsTable)
+}));
+
+export const brandsRelations = relations(brandsTable, ({ many }) => ({
+  products: many(productsTable),
+  excludedBrands: many(excludedBrandsTable)
+}));
+
+export const productsRelations = relations(productsTable, ({ one, many }) => ({
+  marketplace: one(marketplacesTable, {
+    fields: [productsTable.marketplace_id],
+    references: [marketplacesTable.id]
+  }),
+  productType: one(productTypesTable, {
+    fields: [productsTable.product_type_id],
+    references: [productTypesTable.id]
+  }),
+  brand: one(brandsTable, {
+    fields: [productsTable.brand_id],
+    references: [brandsTable.id]
+  }),
+  keywords: many(productKeywordsTable),
   bsrHistory: many(bsrHistoryTable),
   priceHistory: many(priceHistoryTable),
   reviewHistory: many(reviewHistoryTable),
-  favoriteGroupProducts: many(favoriteGroupProductsTable),
-  scrapingLogs: many(scrapingLogsTable)
+  dailyStats: many(dailyProductStatsTable),
+  savedProducts: many(savedProductsTable),
+  userFavoriteGroups: many(userFavoriteProductsGroupsTable)
 }));
 
-export const bsrHistoryRelations = relations(bsrHistoryTable, ({ one }) => ({
-  product: one(productsTable, {
-    fields: [bsrHistoryTable.product_id],
-    references: [productsTable.id]
-  })
-}));
-
-export const priceHistoryRelations = relations(priceHistoryTable, ({ one }) => ({
-  product: one(productsTable, {
-    fields: [priceHistoryTable.product_id],
-    references: [productsTable.id]
-  })
-}));
-
-export const reviewHistoryRelations = relations(reviewHistoryTable, ({ one }) => ({
-  product: one(productsTable, {
-    fields: [reviewHistoryTable.product_id],
-    references: [productsTable.id]
-  })
-}));
-
-export const favoriteGroupsRelations = relations(favoriteGroupsTable, ({ many }) => ({
-  products: many(favoriteGroupProductsTable)
-}));
-
-export const favoriteGroupProductsRelations = relations(favoriteGroupProductsTable, ({ one }) => ({
-  group: one(favoriteGroupsTable, {
-    fields: [favoriteGroupProductsTable.group_id],
-    references: [favoriteGroupsTable.id]
-  }),
-  product: one(productsTable, {
-    fields: [favoriteGroupProductsTable.product_id],
-    references: [productsTable.id]
-  })
-}));
-
-export const scrapingLogsRelations = relations(scrapingLogsTable, ({ one }) => ({
-  product: one(productsTable, {
-    fields: [scrapingLogsTable.product_id],
-    references: [productsTable.id]
-  })
-}));
-
-// TypeScript types for tables
-export type Product = typeof productsTable.$inferSelect;
-export type NewProduct = typeof productsTable.$inferInsert;
-export type BsrHistory = typeof bsrHistoryTable.$inferSelect;
-export type NewBsrHistory = typeof bsrHistoryTable.$inferInsert;
-export type PriceHistory = typeof priceHistoryTable.$inferSelect;
-export type NewPriceHistory = typeof priceHistoryTable.$inferInsert;
-export type ReviewHistory = typeof reviewHistoryTable.$inferSelect;
-export type NewReviewHistory = typeof reviewHistoryTable.$inferInsert;
-export type UserPreference = typeof userPreferencesTable.$inferSelect;
-export type NewUserPreference = typeof userPreferencesTable.$inferInsert;
-export type FavoriteGroup = typeof favoriteGroupsTable.$inferSelect;
-export type NewFavoriteGroup = typeof favoriteGroupsTable.$inferInsert;
-export type FavoriteGroupProduct = typeof favoriteGroupProductsTable.$inferSelect;
-export type NewFavoriteGroupProduct = typeof favoriteGroupProductsTable.$inferInsert;
-export type ScrapingLog = typeof scrapingLogsTable.$inferSelect;
-export type NewScrapingLog = typeof scrapingLogsTable.$inferInsert;
-
-// Export all tables for relation queries
+// Export all tables for proper query building
 export const tables = {
+  marketplaces: marketplacesTable,
+  productTypes: productTypesTable,
+  brands: brandsTable,
   products: productsTable,
+  productKeywords: productKeywordsTable,
+  profiles: profilesTable,
+  excludedBrands: excludedBrandsTable,
+  excludedKeywords: excludedKeywordsTable,
+  favoriteGroups: favoriteGroupsTable,
+  userFavoriteProductsGroups: userFavoriteProductsGroupsTable,
   bsrHistory: bsrHistoryTable,
   priceHistory: priceHistoryTable,
   reviewHistory: reviewHistoryTable,
-  userPreferences: userPreferencesTable,
-  favoriteGroups: favoriteGroupsTable,
-  favoriteGroupProducts: favoriteGroupProductsTable,
-  scrapingLogs: scrapingLogsTable
+  dailyProductStats: dailyProductStatsTable,
+  savedProducts: savedProductsTable,
+  chatHistory: chatHistoryTable,
+  scrapingSessions: scrapingSessionsTable
 };

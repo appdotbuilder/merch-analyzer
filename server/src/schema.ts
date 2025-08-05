@@ -1,209 +1,236 @@
 
 import { z } from 'zod';
 
-// Enums
-export const marketplaceEnum = z.enum(['USA', 'UK', 'Germany']);
-export const productTypeEnum = z.enum(['T-Shirt', 'Tank Top', 'Long Sleeve', 'Hoodie', 'Sweatshirt', 'V-Neck', 'Premium', 'Other']);
-export const scrapingPhaseEnum = z.enum(['Discovery', 'Enrichment']);
+// Marketplace schema
+export const marketplaceSchema = z.object({
+  id: z.number().int(),
+  code: z.enum(['US', 'UK', 'DE']),
+  name: z.string()
+});
+
+export type Marketplace = z.infer<typeof marketplaceSchema>;
+
+// Product type schema
+export const productTypeSchema = z.object({
+  id: z.number().int(),
+  name: z.string()
+});
+
+export type ProductType = z.infer<typeof productTypeSchema>;
+
+// Brand schema
+export const brandSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  normalized_name: z.string()
+});
+
+export type Brand = z.infer<typeof brandSchema>;
 
 // Product schema
 export const productSchema = z.object({
   id: z.number(),
   asin: z.string(),
-  title: z.string(),
-  marketplace: marketplaceEnum,
-  product_type: productTypeEnum,
+  marketplace_id: z.number().int(),
+  product_type_id: z.number().int().nullable(),
+  brand_id: z.number().int().nullable(),
+  title: z.string().nullable(),
+  description_text: z.string().nullable(),
   price: z.number().nullable(),
-  currency: z.string().nullable(),
+  currency_code: z.string().default('USD'),
   rating: z.number().nullable(),
-  review_count: z.number().int().nullable(),
+  reviews_count: z.number().int().nullable(),
   bsr: z.number().int().nullable(),
-  bsr_category: z.string().nullable(),
-  image_url: z.string().nullable(),
-  product_url: z.string(),
-  brand: z.string().nullable(),
-  publication_date: z.coerce.date().nullable(),
+  bsr_30_days_avg: z.number().int().nullable(),
+  bullet_points: z.array(z.string()).nullable(),
+  images: z.array(z.string()).nullable(),
+  product_url: z.string().nullable(),
+  published_at: z.string().nullable(), // DATE field as string
+  deleted: z.boolean().default(false),
+  status: z.string().default('pending_enrichment'),
+  discovery_query: z.string().nullable(),
+  source_type: z.string().default('scraper'),
+  first_seen_at: z.coerce.date(),
   last_scraped_at: z.coerce.date().nullable(),
+  raw_data: z.record(z.any()).nullable(), // JSONB as generic object
   created_at: z.coerce.date(),
   updated_at: z.coerce.date()
 });
 
 export type Product = z.infer<typeof productSchema>;
 
-// Historical data schemas
-export const bsrHistorySchema = z.object({
+// Product keyword schema
+export const productKeywordSchema = z.object({
   id: z.number(),
   product_id: z.number(),
-  bsr: z.number().int(),
-  bsr_category: z.string(),
-  recorded_at: z.coerce.date(),
-  created_at: z.coerce.date()
+  keyword: z.string()
 });
 
-export type BsrHistory = z.infer<typeof bsrHistorySchema>;
+export type ProductKeyword = z.infer<typeof productKeywordSchema>;
 
-export const priceHistorySchema = z.object({
-  id: z.number(),
-  product_id: z.number(),
-  price: z.number(),
-  currency: z.string(),
-  recorded_at: z.coerce.date(),
-  created_at: z.coerce.date()
-});
-
-export type PriceHistory = z.infer<typeof priceHistorySchema>;
-
-export const reviewHistorySchema = z.object({
-  id: z.number(),
-  product_id: z.number(),
-  rating: z.number(),
-  review_count: z.number().int(),
-  recorded_at: z.coerce.date(),
-  created_at: z.coerce.date()
-});
-
-export type ReviewHistory = z.infer<typeof reviewHistorySchema>;
-
-// User preferences schema
-export const userPreferenceSchema = z.object({
-  id: z.number(),
-  user_id: z.string(),
-  excluded_brands: z.array(z.string()),
-  excluded_keywords: z.array(z.string()),
-  preferred_marketplaces: z.array(marketplaceEnum),
-  preferred_product_types: z.array(productTypeEnum),
+// Profile schema
+export const profileSchema = z.object({
+  user_id: z.string().uuid(),
+  email: z.string().email().nullable(),
+  full_name: z.string().nullable(),
+  avatar_url: z.string().nullable(),
   created_at: z.coerce.date(),
   updated_at: z.coerce.date()
 });
 
-export type UserPreference = z.infer<typeof userPreferenceSchema>;
+export type Profile = z.infer<typeof profileSchema>;
+
+// Excluded brands schema
+export const excludedBrandSchema = z.object({
+  id: z.number(),
+  user_id: z.string().uuid(),
+  brand_id: z.number().int(),
+  created_at: z.coerce.date()
+});
+
+export type ExcludedBrand = z.infer<typeof excludedBrandSchema>;
+
+// Excluded keywords schema
+export const excludedKeywordSchema = z.object({
+  id: z.number(),
+  user_id: z.string().uuid(),
+  keyword: z.string(),
+  created_at: z.coerce.date()
+});
+
+export type ExcludedKeyword = z.infer<typeof excludedKeywordSchema>;
 
 // Favorite groups schema
 export const favoriteGroupSchema = z.object({
   id: z.number(),
-  user_id: z.string(),
+  user_id: z.string().uuid(),
   name: z.string(),
-  description: z.string().nullable(),
   created_at: z.coerce.date(),
   updated_at: z.coerce.date()
 });
 
 export type FavoriteGroup = z.infer<typeof favoriteGroupSchema>;
 
-export const favoriteGroupProductSchema = z.object({
+// User favorite products groups schema
+export const userFavoriteProductsGroupSchema = z.object({
   id: z.number(),
-  group_id: z.number(),
+  user_id: z.string().uuid(),
   product_id: z.number(),
-  added_at: z.coerce.date()
-});
-
-export type FavoriteGroupProduct = z.infer<typeof favoriteGroupProductSchema>;
-
-// Scraping log schema
-export const scrapingLogSchema = z.object({
-  id: z.number(),
-  phase: scrapingPhaseEnum,
-  product_id: z.number().nullable(),
-  asin: z.string().nullable(),
-  marketplace: marketplaceEnum,
-  status: z.enum(['Success', 'Failed', 'Skipped']),
-  error_message: z.string().nullable(),
-  scraped_at: z.coerce.date(),
+  group_id: z.number(),
   created_at: z.coerce.date()
 });
 
-export type ScrapingLog = z.infer<typeof scrapingLogSchema>;
+export type UserFavoriteProductsGroup = z.infer<typeof userFavoriteProductsGroupSchema>;
 
-// Input schemas for creating/updating
+// BSR history schema
+export const bsrHistorySchema = z.object({
+  id: z.number(),
+  product_id: z.number(),
+  date: z.string(), // DATE field as string
+  bsr: z.number().int().nullable()
+});
+
+export type BsrHistory = z.infer<typeof bsrHistorySchema>;
+
+// Price history schema
+export const priceHistorySchema = z.object({
+  id: z.number(),
+  product_id: z.number(),
+  date: z.string(), // DATE field as string
+  price: z.number().nullable(),
+  currency_code: z.string()
+});
+
+export type PriceHistory = z.infer<typeof priceHistorySchema>;
+
+// Review history schema
+export const reviewHistorySchema = z.object({
+  id: z.number(),
+  product_id: z.number(),
+  date: z.string(), // DATE field as string
+  reviews_count: z.number().int().nullable(),
+  rating: z.number().nullable()
+});
+
+export type ReviewHistory = z.infer<typeof reviewHistorySchema>;
+
+// Daily product stats schema
+export const dailyProductStatsSchema = z.object({
+  id: z.number(),
+  product_id: z.number(),
+  date: z.string(), // DATE field as string
+  avg_bsr_7: z.number().int().nullable(),
+  avg_bsr_30: z.number().int().nullable(),
+  avg_bsr_90: z.number().int().nullable()
+});
+
+export type DailyProductStats = z.infer<typeof dailyProductStatsSchema>;
+
+// Saved products schema
+export const savedProductSchema = z.object({
+  id: z.number(),
+  user_id: z.string().uuid(),
+  product_id: z.number(),
+  created_at: z.coerce.date()
+});
+
+export type SavedProduct = z.infer<typeof savedProductSchema>;
+
+// Chat history schema
+export const chatHistorySchema = z.object({
+  id: z.number(),
+  user_id: z.string().uuid(),
+  message: z.string(),
+  response: z.string().nullable(),
+  created_at: z.coerce.date()
+});
+
+export type ChatHistory = z.infer<typeof chatHistorySchema>;
+
+// Scraping sessions schema
+export const scrapingSessionSchema = z.object({
+  id: z.number(),
+  marketplace_id: z.number().int(),
+  status: z.string(),
+  products_found: z.number().int().nullable(),
+  started_at: z.coerce.date(),
+  completed_at: z.coerce.date().nullable(),
+  query: z.string().nullable()
+});
+
+export type ScrapingSession = z.infer<typeof scrapingSessionSchema>;
+
+// Input schemas for handlers
 export const createProductInputSchema = z.object({
   asin: z.string(),
-  title: z.string(),
-  marketplace: marketplaceEnum,
-  product_type: productTypeEnum,
-  price: z.number().nullable(),
-  currency: z.string().nullable(),
-  rating: z.number().nullable(),
-  review_count: z.number().int().nullable(),
-  bsr: z.number().int().nullable(),
-  bsr_category: z.string().nullable(),
-  image_url: z.string().nullable(),
-  product_url: z.string(),
-  brand: z.string().nullable(),
-  publication_date: z.coerce.date().nullable()
+  marketplace_id: z.number().int(),
+  product_type_id: z.number().int().optional(),
+  brand_id: z.number().int().optional(),
+  title: z.string().optional(),
+  description_text: z.string().optional(),
+  price: z.number().optional(),
+  currency_code: z.string().default('USD'),
+  rating: z.number().optional(),
+  reviews_count: z.number().int().optional(),
+  bsr: z.number().int().optional(),
+  bsr_30_days_avg: z.number().int().optional(),
+  bullet_points: z.array(z.string()).optional(),
+  images: z.array(z.string()).optional(),
+  product_url: z.string().optional(),
+  published_at: z.string().optional(),
+  discovery_query: z.string().optional(),
+  source_type: z.string().default('scraper'),
+  raw_data: z.record(z.any()).optional()
 });
 
 export type CreateProductInput = z.infer<typeof createProductInputSchema>;
 
-export const updateProductInputSchema = z.object({
-  id: z.number(),
-  title: z.string().optional(),
-  price: z.number().nullable().optional(),
-  currency: z.string().nullable().optional(),
-  rating: z.number().nullable().optional(),
-  review_count: z.number().int().nullable().optional(),
-  bsr: z.number().int().nullable().optional(),
-  bsr_category: z.string().nullable().optional(),
-  image_url: z.string().nullable().optional(),
-  brand: z.string().nullable().optional(),
-  publication_date: z.coerce.date().nullable().optional()
+export const getProductsInputSchema = z.object({
+  marketplace_id: z.number().int().optional(),
+  product_type_id: z.number().int().optional(),
+  brand_id: z.number().int().optional(),
+  limit: z.number().int().min(1).max(100).default(20),
+  offset: z.number().int().min(0).default(0)
 });
 
-export type UpdateProductInput = z.infer<typeof updateProductInputSchema>;
-
-export const productFilterSchema = z.object({
-  marketplace: marketplaceEnum.optional(),
-  product_type: productTypeEnum.optional(),
-  min_price: z.number().optional(),
-  max_price: z.number().optional(),
-  min_bsr: z.number().int().optional(),
-  max_bsr: z.number().int().optional(),
-  min_rating: z.number().optional(),
-  max_rating: z.number().optional(),
-  min_review_count: z.number().int().optional(),
-  max_review_count: z.number().int().optional(),
-  publication_date_from: z.coerce.date().optional(),
-  publication_date_to: z.coerce.date().optional(),
-  search_query: z.string().optional(),
-  excluded_brands: z.array(z.string()).optional(),
-  excluded_keywords: z.array(z.string()).optional(),
-  limit: z.number().int().positive().default(50),
-  offset: z.number().int().nonnegative().default(0)
-});
-
-export type ProductFilter = z.infer<typeof productFilterSchema>;
-
-export const createUserPreferenceInputSchema = z.object({
-  user_id: z.string(),
-  excluded_brands: z.array(z.string()).default([]),
-  excluded_keywords: z.array(z.string()).default([]),
-  preferred_marketplaces: z.array(marketplaceEnum).default([]),
-  preferred_product_types: z.array(productTypeEnum).default([])
-});
-
-export type CreateUserPreferenceInput = z.infer<typeof createUserPreferenceInputSchema>;
-
-export const createFavoriteGroupInputSchema = z.object({
-  user_id: z.string(),
-  name: z.string(),
-  description: z.string().nullable()
-});
-
-export type CreateFavoriteGroupInput = z.infer<typeof createFavoriteGroupInputSchema>;
-
-export const addProductToGroupInputSchema = z.object({
-  group_id: z.number(),
-  product_id: z.number()
-});
-
-export type AddProductToGroupInput = z.infer<typeof addProductToGroupInputSchema>;
-
-export const createScrapingLogInputSchema = z.object({
-  phase: scrapingPhaseEnum,
-  product_id: z.number().nullable(),
-  asin: z.string().nullable(),
-  marketplace: marketplaceEnum,
-  status: z.enum(['Success', 'Failed', 'Skipped']),
-  error_message: z.string().nullable()
-});
-
-export type CreateScrapingLogInput = z.infer<typeof createScrapingLogInputSchema>;
+export type GetProductsInput = z.infer<typeof getProductsInputSchema>;

@@ -1,10 +1,24 @@
 
+import { db } from '../db';
+import { priceHistoryTable } from '../db/schema';
 import { type PriceHistory } from '../schema';
+import { eq, desc } from 'drizzle-orm';
 
-export async function getPriceHistory(productId: number, days?: number): Promise<PriceHistory[]> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching price historical data for a specific product.
-    // Optional days parameter limits the history to the last N days.
-    // Should order results by recorded_at descending (most recent first).
-    return Promise.resolve([]);
-}
+export const getPriceHistory = async (productId: number): Promise<PriceHistory[]> => {
+  try {
+    const results = await db.select()
+      .from(priceHistoryTable)
+      .where(eq(priceHistoryTable.product_id, productId))
+      .orderBy(desc(priceHistoryTable.date))
+      .execute();
+
+    // Convert numeric price fields back to numbers
+    return results.map(record => ({
+      ...record,
+      price: record.price ? parseFloat(record.price) : null
+    }));
+  } catch (error) {
+    console.error('Price history fetch failed:', error);
+    throw error;
+  }
+};

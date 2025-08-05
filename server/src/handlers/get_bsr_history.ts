@@ -1,10 +1,23 @@
 
+import { db } from '../db';
+import { bsrHistoryTable } from '../db/schema';
 import { type BsrHistory } from '../schema';
+import { eq, desc } from 'drizzle-orm';
 
-export async function getBsrHistory(productId: number, days?: number): Promise<BsrHistory[]> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching BSR historical data for a specific product.
-    // Optional days parameter limits the history to the last N days.
-    // Should order results by recorded_at descending (most recent first).
-    return Promise.resolve([]);
-}
+export const getBsrHistory = async (productId: number): Promise<BsrHistory[]> => {
+  try {
+    const results = await db.select()
+      .from(bsrHistoryTable)
+      .where(eq(bsrHistoryTable.product_id, productId))
+      .orderBy(desc(bsrHistoryTable.date))
+      .execute();
+
+    return results.map(result => ({
+      ...result,
+      product_id: Number(result.product_id) // Convert bigint to number
+    }));
+  } catch (error) {
+    console.error('BSR history retrieval failed:', error);
+    throw error;
+  }
+};
